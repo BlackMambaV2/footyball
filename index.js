@@ -30,28 +30,36 @@ const GITHUB_RAW_URL = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHU
 let browser;
 
 async function getBrowser() {
-    if (!browser || !browser.isConnected()) {
-        const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL;
-        
+    try {
+        if (!browser || !browser.isConnected()) {
+            const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL;
+            
         if (isProd) {
             // Configuration pour VERCEL
+            const executablePath = await chromium.executablePath();
+            console.log('Lancement de Chromium sur Vercel...');
+            
             browser = await puppeteer.launch({
-                args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
+                args: [...chromium.args, '--hide-scrollbars', '--disable-web-security'],
                 defaultViewport: chromium.defaultViewport,
-                executablePath: await chromium.executablePath(),
+                executablePath: executablePath,
                 headless: chromium.headless,
                 ignoreHTTPSErrors: true,
             });
         } else {
-            // Configuration pour LOCAL
-            browser = await puppeteer.launch({
-                headless: "new",
-                args: ['--no-sandbox'],
-                executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
-            });
+                // Configuration pour LOCAL
+                browser = await puppeteer.launch({
+                    headless: "new",
+                    args: ['--no-sandbox'],
+                    executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+                });
+            }
         }
+        return browser;
+    } catch (e) {
+        console.error('Launch error:', e);
+        throw new Error(`Failed to launch browser: ${e.message}`);
     }
-    return browser;
 }
 
 async function performSearch(searchTerm) {
@@ -59,10 +67,15 @@ async function performSearch(searchTerm) {
     try {
         const browserInstance = await getBrowser();
         page = await browserInstance.newPage();
+        
+        // Optimisation pour Vercel (Timeout court)
+        await page.setDefaultNavigationTimeout(15000);
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36');
         
-        await page.goto('https://sortitoutsi.net/search', { waitUntil: 'domcontentloaded', timeout: 60000 });
+        console.log('Navigation vers sortitoutsi...');
+        await page.goto('https://sortitoutsi.net/search', { waitUntil: 'networkidle2', timeout: 15000 });
 
+        console.log('Exécution du script de recherche...');
         const apiResponse = await page.evaluate(async (url, term) => {
             const response = await fetch(url, {
                 method: 'POST',
@@ -73,9 +86,14 @@ async function performSearch(searchTerm) {
                 },
                 body: JSON.stringify({ search_term: term })
             });
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            if (!response.ok) return { error: `HTTP ${response.status}` };
             return await response.json();
         }, TARGET_API_URL, searchTerm);
+
+        if (apiResponse && apiResponse.error) {
+            throw new Error(`Erreur API Sortitoutsi: ${apiResponse.error}`);
+        }
+
 
         if (apiResponse && apiResponse.data) {
             const ALLOWED_FIELDS = [
@@ -139,10 +157,15 @@ async function performSearch(searchTerm) {
 app.post('/api/search', async (req, res) => {
     try {
         const { search_term } = req.body;
+        console.log(`Recherche pour: ${search_term}`);
         const results = await performSearch(search_term);
         res.json(results);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error('API Error:', error);
+        res.status(500).json({ 
+            error: error.message,
+            stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined 
+        });
     }
 });
 
