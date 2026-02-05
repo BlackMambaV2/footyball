@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Footyball - Recherche de Data</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: radial-gradient(circle at top center, #1a2e21 0%, #0f172a 100%);
+            min-height: 100vh;
+            color: white;
+        }
+
+        .search-glow:focus {
+            box-shadow: 0 0 20px rgba(34, 197, 94, 0.4);
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s ease;
+        }
+
+        .glass-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.07);
+            border-color: rgba(34, 197, 94, 0.3);
+        }
+
+        .kit-thumb {
+            width: 40px;
+            height: 40px;
+            object-fit: contain;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+        }
+
+        .loader {
+            border-top-color: #22c55e;
+            animation: spinner 0.6s linear infinite;
+        }
+
+        @keyframes spinner {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    
+    <!-- Header/Hero -->
+    <div class="max-w-6xl mx-auto text-center mb-12 mt-8">
+        <h1 class="text-5xl md:text-7xl font-extrabold mb-4 tracking-tight">
+            FOOTY<span class="text-green-500">BALL</span>
+        </h1>
+        <p class="text-gray-400 text-lg mb-8">Recherchez des clubs, des joueurs et des kits en un instant.</p>
+
+        <!-- Search Bar -->
+        <div class="relative max-w-2xl mx-auto">
+            <input type="text" id="searchInput" 
+                placeholder="Ex: Real Madrid, Mbappé, Arsenal..." 
+                class="w-full bg-slate-900/50 border border-slate-700 text-white rounded-full py-4 px-6 pl-14 text-lg outline-none focus:border-green-500 transition-all search-glow">
+            <i class="fa-solid fa-magnifying-glass absolute left-6 top-1/2 -translate-y-1/2 text-gray-500 text-xl"></i>
+            <button id="searchBtn" class="absolute right-3 top-1/2 -translate-y-1/2 bg-green-500 hover:bg-green-600 text-slate-900 font-bold py-2 px-6 rounded-full transition-colors">
+                Chercher
+            </button>
+        </div>
+    </div>
+
+    <!-- Results Section -->
+    <div class="max-w-7xl mx-auto">
+        <div id="loading" class="hidden flex justify-center my-12">
+            <div class="loader ease-linear rounded-full border-4 border-t-4 border-slate-700 h-12 w-12"></div>
+        </div>
+
+        <div id="resultsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <!-- Cards will be injected here -->
+        </div>
+
+        <div id="noResults" class="hidden text-center py-20">
+            <i class="fa-regular fa-face-frown text-6xl text-slate-700 mb-4"></i>
+            <p class="text-gray-500 text-xl">Aucun résultat trouvé pour cette recherche.</p>
+        </div>
+    </div>
+
+    <script>
+        const searchInput = document.getElementById('searchInput');
+        const searchBtn = document.getElementById('searchBtn');
+        const resultsGrid = document.getElementById('resultsGrid');
+        const loading = document.getElementById('loading');
+        const noResults = document.getElementById('noResults');
+
+        async function performSearch() {
+            const query = searchInput.value.trim();
+            if (!query) return;
+
+            // UI State
+            loading.classList.remove('hidden');
+            resultsGrid.innerHTML = '';
+            noResults.classList.add('hidden');
+
+            try {
+                const response = await fetch(`/api/search`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ search_term: query })
+                });
+                
+                const data = await response.json();
+                
+                loading.classList.add('hidden');
+
+                if (!data.data || data.data.length === 0) {
+                    noResults.classList.remove('hidden');
+                    return;
+                }
+
+                displayResults(data.data);
+            } catch (error) {
+                console.error('Search error:', error);
+                loading.classList.add('hidden');
+                alert('Une erreur est survenue lors de la recherche.');
+            }
+        }
+
+        function displayResults(items) {
+            items.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'glass-card rounded-2xl p-5 flex flex-col items-center text-center relative overflow-hidden';
+                
+                // Badge Type
+                const typeLabel = item.type_id === 'team' ? 'Club' : 'Joueur';
+                const typeColor = item.type_id === 'team' ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400';
+
+                // Image logic
+                const imgUrl = item.local_face_url || item.logo_url || item.icon_url;
+                const fallbackImg = `https://ui-avatars.com/api/?name=${encodeURIComponent(item.name)}&background=random&color=fff&size=128`;
+
+                // Kits HTML
+                let kitsHtml = '';
+                if (item.local_kits && Object.keys(item.local_kits).length > 0) {
+                    kitsHtml = `
+                        <div class="mt-4 pt-4 border-t border-white/5 w-full">
+                            <p class="text-[10px] uppercase tracking-widest text-gray-500 mb-2 font-bold">Kits Disponibles</p>
+                            <div class="flex justify-center gap-3">
+                                ${Object.entries(item.local_kits).map(([type, url]) => `
+                                    <img src="${url}" class="kit-thumb" title="${type}" onerror="this.style.display='none'">
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                card.innerHTML = `
+                    <span class="absolute top-3 right-3 text-[10px] font-bold px-2 py-1 rounded ${typeColor} uppercase tracking-wider">
+                        ${typeLabel}
+                    </span>
+                    
+                    <div class="w-24 h-24 mb-4 relative">
+                        <img src="${imgUrl}" 
+                             onerror="this.src='${fallbackImg}'"
+                             class="w-full h-full object-contain rounded-xl shadow-lg">
+                    </div>
+
+                    <h3 class="text-lg font-bold text-white mb-1 line-clamp-1">${item.name}</h3>
+                    <p class="text-sm text-gray-400 mb-4">${item.detail_name || ''}</p>
+                    
+                    ${item.team_icon_url ? `<img src="${item.team_icon_url}" class="w-6 h-6 object-contain mb-2" title="Club">` : ''}
+                    
+                    <div class="mt-auto w-full">
+                        <a href="https://sortitoutsi.net/${item.type_id || 'team'}/${item.id || item.fm_id}" target="_blank" 
+                           class="text-xs text-green-500 hover:text-green-400 font-medium transition-colors">
+                            Voir sur Sortitoutsi <i class="fa-solid fa-arrow-up-right-from-square ml-1"></i>
+                        </a>
+                    </div>
+
+                    ${kitsHtml}
+                `;
+                resultsGrid.appendChild(card);
+            });
+        }
+
+        searchBtn.addEventListener('click', performSearch);
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') performSearch();
+        });
+    </script>
+</body>
+</html>
