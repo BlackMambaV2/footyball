@@ -1,0 +1,4 @@
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ✅ audit secrets and track compliance: https://dotenvx.com/ops
+Serveur démarré sur http://localhost:3001
+Recherche GET via Puppeteer pour: morten hjulmand
+Réponse reçue avec succès (GET)
