@@ -51,8 +51,84 @@
         }
     </style>
 </head>
-<body class="p-4 md:p-8">
+<body class="p-4 md:p-8 relative">
     
+    <!-- Kit Modal -->
+    <div id="kitModal" class="hidden fixed inset-0 z-[150] flex items-center justify-center p-4">
+        <div onclick="toggleKitModal(false)" class="absolute inset-0 bg-black/90 backdrop-blur-md"></div>
+        <div class="relative z-[160] max-w-sm w-full text-center">
+            <button onclick="toggleKitModal(false)" class="absolute -top-12 right-0 text-white/50 hover:text-white transition-colors text-3xl">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <img id="modalKitImg" src="" class="w-full h-auto drop-shadow-[0_0_30px_rgba(34,197,94,0.3)] select-none">
+            <p id="modalKitLabel" class="mt-6 text-xl font-bold uppercase tracking-widest text-green-500"></p>
+        </div>
+    </div>
+
+    <!-- API Modal Trigger -->
+    <button onclick="toggleModal(true)" class="fixed top-6 right-6 z-50 bg-slate-900/80 hover:bg-green-500/20 border border-slate-700 hover:border-green-500 text-white px-4 py-2 rounded-xl transition-all flex items-center gap-2 backdrop-blur-sm group">
+        <i class="fa-solid fa-code text-green-500 group-hover:scale-110 transition-transform"></i>
+        <span class="text-xs font-bold uppercase tracking-widest">API</span>
+    </button>
+
+    <!-- API Documentation Modal -->
+    <div id="apiModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8">
+        <!-- Backdrop -->
+        <div onclick="toggleModal(false)" class="absolute inset-0 bg-black/80 backdrop-blur-md"></div>
+        
+        <!-- Modal Content -->
+        <div class="glass-card w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl p-6 md:p-8 relative z-[110] border-t border-green-500/30 shadow-2xl">
+            <button onclick="toggleModal(false)" class="absolute top-6 right-6 text-gray-500 hover:text-white transition-colors">
+                <i class="fa-solid fa-xmark text-2xl"></i>
+            </button>
+
+            <h2 class="text-3xl font-bold mb-8 flex items-center gap-3">
+                <i class="fa-solid fa-code text-green-500"></i>
+                Documentation API
+            </h2>
+            
+            <div class="space-y-6 text-left">
+                <!-- Endpoint 1 -->
+                <div class="bg-slate-900/60 rounded-2xl p-6 border border-slate-800">
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="bg-green-600 text-[10px] font-bold px-2 py-1 rounded uppercase">POST</span>
+                        <code class="text-green-400 font-mono text-sm">/api/search</code>
+                    </div>
+                    <p class="text-gray-400 text-sm mb-4">Recherche globale (joueurs/clubs) avec support des visages et maillots.</p>
+                    <div class="bg-black/40 rounded-xl p-4 font-mono text-xs text-blue-300 overflow-x-auto">
+                        <span class="text-gray-500">// Payload JSON</span><br>
+                        { "search_term": "Real Madrid" }
+                    </div>
+                </div>
+
+                <!-- Endpoint 2 -->
+                <div class="bg-slate-900/60 rounded-2xl p-6 border border-slate-800">
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="bg-blue-600 text-[10px] font-bold px-2 py-1 rounded uppercase">GET</span>
+                        <code class="text-blue-400 font-mono text-sm">/api/search/:name</code>
+                    </div>
+                    <p class="text-gray-400 text-sm">Recherche rapide via paramètre d'URL.</p>
+                </div>
+
+                <!-- Endpoint 3 -->
+                <div class="bg-slate-900/60 rounded-2xl p-6 border border-slate-800">
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="bg-blue-600 text-[10px] font-bold px-2 py-1 rounded uppercase">GET</span>
+                        <code class="text-blue-400 font-mono text-sm">/api/team/:name</code>
+                    </div>
+                    <p class="text-gray-400 text-sm">Filtre strict sur les clubs uniquement.</p>
+                </div>
+            </div>
+
+            <div class="mt-10 pt-6 border-t border-white/5 text-center">
+                <p class="text-gray-500 text-xs italic leading-relaxed">
+                    Les réponses incluent les URLs vers les assets hébergés sur GitHub CDN.<br>
+                    Ex: faces/1234.png ou kits/1234_home.png
+                </p>
+            </div>
+        </div>
+    </div>
+
     <!-- Header/Hero -->
     <div class="max-w-6xl mx-auto text-center mb-12 mt-8">
         <h1 class="text-5xl md:text-7xl font-extrabold mb-4 tracking-tight">
@@ -61,7 +137,7 @@
         <p class="text-gray-400 text-lg mb-8">Recherchez des clubs, des joueurs et des kits en un instant.</p>
 
         <!-- Search Bar -->
-        <div class="relative max-w-2xl mx-auto">
+        <div class="relative max-w-2xl mx-auto mb-6">
             <input type="text" id="searchInput" 
                 placeholder="Ex: Real Madrid, Mbappé, Arsenal..." 
                 class="w-full bg-slate-900/50 border border-slate-700 text-white rounded-full py-4 px-6 pl-14 text-lg outline-none focus:border-green-500 transition-all search-glow">
@@ -69,6 +145,13 @@
             <button id="searchBtn" class="absolute right-3 top-1/2 -translate-y-1/2 bg-green-500 hover:bg-green-600 text-slate-900 font-bold py-2 px-6 rounded-full transition-colors">
                 Chercher
             </button>
+        </div>
+
+        <!-- Filters -->
+        <div class="flex justify-center gap-4 mb-8">
+            <button onclick="filterResults('all')" id="filter-all" class="filter-btn active px-6 py-2 rounded-full border border-slate-700 bg-slate-800 text-sm font-medium transition-all hover:border-green-500">Tous</button>
+            <button onclick="filterResults('team')" id="filter-team" class="filter-btn px-6 py-2 rounded-full border border-slate-700 bg-slate-900/50 text-slate-400 text-sm font-medium transition-all hover:border-blue-500">Clubs</button>
+            <button onclick="filterResults('person')" id="filter-person" class="filter-btn px-6 py-2 rounded-full border border-slate-700 bg-slate-900/50 text-slate-400 text-sm font-medium transition-all hover:border-orange-500">Joueurs</button>
         </div>
     </div>
 
@@ -88,12 +171,44 @@
         </div>
     </div>
 
+    <!-- API Documentation Section -->
+
     <script>
         const searchInput = document.getElementById('searchInput');
         const searchBtn = document.getElementById('searchBtn');
         const resultsGrid = document.getElementById('resultsGrid');
         const loading = document.getElementById('loading');
         const noResults = document.getElementById('noResults');
+        const apiModal = document.getElementById('apiModal');
+        const kitModal = document.getElementById('kitModal');
+        const modalKitImg = document.getElementById('modalKitImg');
+        const modalKitLabel = document.getElementById('modalKitLabel');
+
+        function toggleModal(show) {
+            if (show) {
+                apiModal.classList.remove('hidden');
+                document.body.style.overflow = 'hidden'; // Empêche le scroll du fond
+            } else {
+                apiModal.classList.add('hidden');
+                document.body.style.overflow = '';
+            }
+        }
+
+        function toggleKitModal(show) {
+            if (show) {
+                kitModal.classList.remove('hidden');
+                document.body.style.overflow = 'hidden';
+            } else {
+                kitModal.classList.add('hidden');
+                document.body.style.overflow = '';
+            }
+        }
+
+        function openKitViewer(url, type) {
+            modalKitImg.src = url;
+            modalKitLabel.innerText = type === 'home' ? 'Maillot Domicile' : type === 'away' ? 'Maillot Extérieur' : 'Troisième Maillot';
+            toggleKitModal(true);
+        }
 
         async function performSearch() {
             const query = searchInput.value.trim();
@@ -138,7 +253,14 @@
                 const typeColor = item.type_id === 'team' ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400';
 
                 // Image logic
-                const imgUrl = item.local_face_url || item.logo_url || item.icon_url;
+                // Pour les joueurs, on utilise logo_url en priorité pour le visage, sinon local_face_url
+                let imgUrl = item.logo_url || item.local_face_url || item.icon_url;
+                
+                // Si c'est un joueur et qu'on a un fm_id, on peut aussi tenter le visage local/CDN
+                if (item.type_id === 'person' && item.fm_id) {
+                    imgUrl = item.logo_url || item.local_face_url;
+                }
+
                 const fallbackImg = `https://ui-avatars.com/api/?name=${encodeURIComponent(item.name)}&background=random&color=fff&size=128`;
 
                 // Kits HTML
@@ -168,22 +290,148 @@
                     </div>
 
                     <h3 class="text-lg font-bold text-white mb-1 line-clamp-1">${item.name}</h3>
-                    <p class="text-sm text-gray-400 mb-4">${item.detail_name || ''}</p>
+                    <p class="text-sm text-gray-400 mb-2">${item.detail_name || ''}</p>
                     
-                    ${item.team_icon_url ? `<img src="${item.team_icon_url}" class="w-6 h-6 object-contain mb-2" title="Club">` : ''}
+                    ${item.team_icon_url ? `
+                        <div class="flex items-center gap-2 mb-4 bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
+                            <img src="${item.team_icon_url}" class="w-5 h-5 object-contain" title="Club">
+                            <span class="text-[11px] font-medium text-gray-300 truncate max-w-[120px]">${item.detail_name ? item.detail_name.split(' - ')[0] : 'Club'}</span>
+                        </div>
+                    ` : ''}
                     
-                    <div class="mt-auto w-full">
-                        <a href="https://sortitoutsi.net/${item.type_id || 'team'}/${item.id || item.fm_id}" target="_blank" 
-                           class="text-xs text-green-500 hover:text-green-400 font-medium transition-colors">
-                            Voir sur Sortitoutsi <i class="fa-solid fa-arrow-up-right-from-square ml-1"></i>
-                        </a>
-                    </div>
-
                     ${kitsHtml}
                 `;
                 resultsGrid.appendChild(card);
             });
         }
+
+        let currentData = [];
+        let currentFilter = 'all';
+
+        function filterResults(type) {
+            currentFilter = type;
+            
+            // Update Buttons UI
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active', 'border-green-500', 'border-blue-500', 'border-orange-500', 'bg-slate-800');
+                btn.classList.add('bg-slate-900/50', 'text-slate-400');
+            });
+
+            const activeBtn = document.getElementById(`filter-${type}`);
+            activeBtn.classList.add('active', 'bg-slate-800');
+            activeBtn.classList.remove('text-slate-400');
+            
+            if(type === 'all') activeBtn.classList.add('border-green-500');
+            if(type === 'team') activeBtn.classList.add('border-blue-500');
+            if(type === 'person') activeBtn.classList.add('border-orange-500');
+
+            // Filter Data
+            const filtered = type === 'all' ? currentData : currentData.filter(item => item.type_id === type);
+            
+            resultsGrid.innerHTML = '';
+            if (filtered.length === 0) {
+                noResults.classList.remove('hidden');
+            } else {
+                noResults.classList.add('hidden');
+                renderCards(filtered);
+            }
+        }
+
+        async function performSearch() {
+            const query = searchInput.value.trim();
+            if (!query) return;
+
+            // UI State
+            loading.classList.remove('hidden');
+            resultsGrid.innerHTML = '';
+            noResults.classList.add('hidden');
+
+            try {
+                const response = await fetch(`/api/search`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ search_term: query })
+                });
+                
+                const data = await response.json();
+                
+                loading.classList.add('hidden');
+                currentData = data.data || [];
+
+                if (currentData.length === 0) {
+                    noResults.classList.remove('hidden');
+                    return;
+                }
+
+                filterResults(currentFilter);
+            } catch (error) {
+                console.error('Search error:', error);
+                loading.classList.add('hidden');
+                alert('Une erreur est survenue lors de la recherche.');
+            }
+        }
+
+        function renderCards(items) {
+            items.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'glass-card rounded-2xl p-5 flex flex-col items-center text-center relative overflow-hidden';
+                
+                // Badge Type
+                const typeLabel = item.type_id === 'team' ? 'Club' : 'Joueur';
+                const typeColor = item.type_id === 'team' ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400';
+
+                // Image logic
+                // Pour les joueurs, on utilise logo_url en priorité pour le visage, sinon local_face_url
+                let imgUrl = item.logo_url || item.local_face_url || item.icon_url;
+                
+                // Si c'est un joueur et qu'on a un fm_id, on peut aussi tenter le visage local/CDN
+                if (item.type_id === 'person' && item.fm_id) {
+                    imgUrl = item.logo_url || item.local_face_url;
+                }
+
+                const fallbackImg = `https://ui-avatars.com/api/?name=${encodeURIComponent(item.name)}&background=random&color=fff&size=128`;
+
+                // Kits HTML
+                let kitsHtml = '';
+                if (item.local_kits && Object.keys(item.local_kits).length > 0) {
+                    kitsHtml = `
+                        <div class="mt-4 pt-4 border-t border-white/5 w-full">
+                            <p class="text-[10px] uppercase tracking-widest text-gray-500 mb-2 font-bold">Kits Disponibles</p>
+                            <div class="flex justify-center gap-3">
+                                ${Object.entries(item.local_kits).map(([type, url]) => `
+                                    <img src="${url}" 
+                                         class="kit-thumb cursor-pointer hover:scale-125 transition-transform" 
+                                         title="${type}" 
+                                         onclick="openKitViewer('${url}', '${type}')"
+                                         onerror="this.style.display='none'">
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                card.innerHTML = `
+                    <span class="absolute top-3 right-3 text-[10px] font-bold px-2 py-1 rounded ${typeColor} uppercase tracking-wider">
+                        ${typeLabel}
+                    </span>
+                    
+                    <div class="w-24 h-24 mb-4 relative">
+                        <img src="${imgUrl}" 
+                             onerror="this.src='${fallbackImg}'"
+                             class="w-full h-full object-contain rounded-xl shadow-lg">
+                    </div>
+
+                    <h3 class="text-lg font-bold text-white mb-1 line-clamp-1">${item.name}</h3>
+                    <p class="text-sm text-gray-400 mb-4">${item.detail_name || ''}</p>
+                    
+                    ${item.team_icon_url ? `<img src="${item.team_icon_url}" class="w-6 h-6 object-contain mb-2" title="Club">` : ''}
+                    
+                    ${kitsHtml}
+                `;
+                resultsGrid.appendChild(card);
+            });
+        }
+
 
         searchBtn.addEventListener('click', performSearch);
         searchInput.addEventListener('keypress', (e) => {
