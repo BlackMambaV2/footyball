@@ -34,20 +34,16 @@ async function getBrowser() {
         if (!browser || !browser.isConnected()) {
             const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL;
             
-        if (isProd) {
-            // Configuration pour VERCEL
-            const executablePath = await chromium.executablePath();
-            console.log('Lancement de Chromium sur Vercel...');
-            
-            browser = await puppeteer.launch({
-                args: [...chromium.args, '--hide-scrollbars', '--disable-web-security'],
-                defaultViewport: chromium.defaultViewport,
-                executablePath: executablePath,
-                headless: chromium.headless,
-                ignoreHTTPSErrors: true,
-            });
-        } else {
-                // Configuration pour LOCAL
+            if (isProd) {
+                const executablePath = await chromium.executablePath();
+                browser = await puppeteer.launch({
+                    args: [...chromium.args, '--hide-scrollbars', '--disable-web-security'],
+                    defaultViewport: chromium.defaultViewport,
+                    executablePath: executablePath,
+                    headless: chromium.headless,
+                    ignoreHTTPSErrors: true,
+                });
+            } else {
                 browser = await puppeteer.launch({
                     headless: "new",
                     args: ['--no-sandbox'],
@@ -68,41 +64,55 @@ async function performSearch(searchTerm) {
         const browserInstance = await getBrowser();
         page = await browserInstance.newPage();
         
-        // Optimisation pour Vercel (Timeout court)
-        await page.setDefaultNavigationTimeout(15000);
-        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36');
+        // Simulation d'un navigateur humain
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
         
-        console.log('Navigation vers sortitoutsi...');
-        await page.goto('https://sortitoutsi.net/search', { waitUntil: 'networkidle2', timeout: 15000 });
+        // Masquer les traces de Puppeteer
+        await page.evaluateOnNewDocument(() => {
+            Object.defineProperty(navigator, 'webdriver', { get: () => false });
+            window.chrome = { runtime: {} };
+            const originalQuery = window.navigator.permissions.query;
+            window.navigator.permissions.query = (parameters) => (
+              parameters.name === 'notifications' ?
+                Promise.resolve({ state: Notification.permission }) :
+                originalQuery(parameters)
+            );
+        });
 
-        console.log('Exécution du script de recherche...');
+        // 1. Aller sur la page de recherche pour obtenir les cookies et le CSRF
+        console.log(`Initialisation de la session pour: ${searchTerm}`);
+        await page.goto('https://sortitoutsi.net/search', { waitUntil: 'domcontentloaded', timeout: 30000 });
+
+        // 2. Attendre que le token CSRF soit injecté dans le DOM
+        await page.waitForSelector('meta[name="csrf-token"]', { timeout: 10000 });
+
+        // 3. Effectuer la requête API depuis le contexte de la page (Crucial pour les cookies/sessions)
+        console.log('Appel de l\'API Sortitoutsi...');
         const apiResponse = await page.evaluate(async (url, term) => {
+            const token = document.querySelector('meta[name="csrf-token"]')?.content;
+            if (!token) throw new Error("CSRF Token missing");
+
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
-                    'X-Requested-With': 'XMLHttpRequest'
+                    'X-CSRF-TOKEN': token,
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
                 },
                 body: JSON.stringify({ search_term: term })
             });
-            if (!response.ok) return { error: `HTTP ${response.status}` };
+
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(`API_ERROR_${response.status}: ${text.substring(0, 100)}`);
+            }
+
             return await response.json();
         }, TARGET_API_URL, searchTerm);
 
-        if (apiResponse && apiResponse.error) {
-            throw new Error(`Erreur API Sortitoutsi: ${apiResponse.error}`);
-        }
-
-
+        // 4. Traitement des données (Kits, Visages, etc.)
         if (apiResponse && apiResponse.data) {
-            const ALLOWED_FIELDS = [
-                "id", "fm_id", "gender", "type_id", "classification_id", "name", "slug",
-                "continent_id", "nation_id", "contracted_nation_id", "division_id", "team_id",
-                "icon_url", "logo_url", "flag_url", "team_icon_url", "nation_icon_url",
-                "detail_name", "local_kits", "team_fm_id", "external_kits_info", "local_face_url"
-            ];
-
             apiResponse.data = apiResponse.data.map(item => {
                 let teamFmId = null;
                 if (item.type_id === 'team' || item.classification_id === 'team') {
@@ -113,42 +123,26 @@ async function performSearch(searchTerm) {
                 }
 
                 if (item.type_id === 'person' && item.fm_id) {
-                    // En local on vérifie si le fichier existe, en prod on fait confiance à GitHub
-                    const localFacePath = path.join(__dirname, 'public', 'faces', `${item.fm_id}.png`);
-                    if (process.env.NODE_ENV !== 'production') {
-                        if (fs.existsSync(localFacePath)) {
-                            item.local_face_url = `http://localhost:${PORT}/images/faces/${item.fm_id}.png`;
-                        }
-                    } else {
-                        item.local_face_url = `${GITHUB_RAW_URL}/faces/${item.fm_id}.png`;
-                    }
+                    item.local_face_url = `${GITHUB_RAW_URL}/faces/${item.fm_id}.png`;
                 }
 
                 if (teamFmId) {
-                    const kitTypes = ['home', 'away', 'third'];
-                    item.local_kits = {};
                     item.team_fm_id = teamFmId;
-                    item.external_kits_info = `https://sortitoutsi.net/team/${teamFmId}/kits`;
-                    
-                    kitTypes.forEach(type => {
-                        const fileName = `${teamFmId}_${type}.png`;
-                        if (process.env.NODE_ENV !== 'production') {
-                            const localKitPath = path.join(__dirname, 'public', 'kits', fileName);
-                            if (fs.existsSync(localKitPath)) {
-                                item.local_kits[type] = `http://localhost:${PORT}/images/kits/${fileName}`;
-                            }
-                        } else {
-                            item.local_kits[type] = `${GITHUB_RAW_URL}/kits/${fileName}`;
-                        }
-                    });
+                    item.local_kits = {
+                        home: `${GITHUB_RAW_URL}/kits/${teamFmId}_home.png`,
+                        away: `${GITHUB_RAW_URL}/kits/${teamFmId}_away.png`,
+                        third: `${GITHUB_RAW_URL}/kits/${teamFmId}_third.png`
+                    };
                 }
                 
-                return Object.keys(item)
-                    .filter(key => ALLOWED_FIELDS.includes(key))
-                    .reduce((obj, key) => { obj[key] = item[key]; return obj; }, {});
+                return item;
             });
         }
+
         return apiResponse;
+    } catch (error) {
+        console.error('API Simulation Error:', error.message);
+        throw error;
     } finally {
         if (page) await page.close();
     }
@@ -157,18 +151,14 @@ async function performSearch(searchTerm) {
 app.post('/api/search', async (req, res) => {
     try {
         const { search_term } = req.body;
-        console.log(`Recherche pour: ${search_term}`);
         const results = await performSearch(search_term);
         res.json(results);
     } catch (error) {
-        console.error('API Error:', error);
-        res.status(500).json({ 
-            error: error.message,
-            stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined 
-        });
+        res.status(500).json({ error: error.message });
     }
 });
 
+// Routes de compatibilité
 app.get('/api/search/:name', async (req, res) => {
     try {
         const results = await performSearch(req.params.name);
@@ -190,10 +180,8 @@ app.get('/api/team/:name', async (req, res) => {
     }
 });
 
-// Export pour Vercel
 module.exports = app;
 
-// Démarrage local
 if (process.env.NODE_ENV !== 'production') {
     app.listen(PORT, () => console.log(`Serveur local : http://localhost:${PORT}`));
 }
