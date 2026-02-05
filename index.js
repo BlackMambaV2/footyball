@@ -23,7 +23,7 @@ app.use('/images', express.static(path.join(__dirname, 'public')));
 const TARGET_API_URL = 'https://sortitoutsi.net/api/search-records'; 
 
 // Configuration GitHub pour les images (CDN Gratuit)
-const GITHUB_USER = process.env.GITHUB_USER || "VOTRE_PSEUDO";
+const GITHUB_USER = process.env.GITHUB_USER || "BlackMambaV2";
 const GITHUB_REPO = process.env.GITHUB_REPO || "footyball";
 const GITHUB_RAW_URL = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/public`;
 
