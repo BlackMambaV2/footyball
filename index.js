@@ -2,23 +2,18 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
-const puppeteer = require('puppeteer-extra');
-const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+const puppeteer = require('puppeteer-core');
 const fs = require('fs');
 const path = require('path');
 
 // Configuration spéciale pour Vercel
 const chromium = require('@sparticuz/chromium');
-const puppeteerCore = require('puppeteer-core');
-
-puppeteer.use(StealthPlugin());
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
-app.use('/images', express.static(path.join(__dirname, 'public')));
 
 const TARGET_API_URL = 'https://sortitoutsi.net/api/search-records'; 
 
@@ -36,20 +31,18 @@ async function getBrowser() {
         if (isProd) {
             // Configuration pour VERCEL
             browser = await puppeteer.launch({
-                args: chromium.args,
+                args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
                 defaultViewport: chromium.defaultViewport,
                 executablePath: await chromium.executablePath(),
                 headless: chromium.headless,
                 ignoreHTTPSErrors: true,
             });
         } else {
-            // Configuration pour LOCAL (Windows)
-            // Assurez-vous d'avoir Chrome installé ou pointez vers votre binaire
+            // Configuration pour LOCAL
             browser = await puppeteer.launch({
                 headless: "new",
                 args: ['--no-sandbox'],
-                // Sur Windows, Puppeteer trouve généralement Chrome seul, 
-                // sinon spécifiez executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+                executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
             });
         }
     }
